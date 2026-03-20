@@ -644,17 +644,108 @@ html, body {
 
     .video-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .video-container {
+        aspect-ratio: auto;
+        min-height: 250px;
+        max-height: 350px;
+    }
+
+    .video-container.screen-share-local,
+    .video-container.screen-share-remote {
+        min-height: 300px;
     }
 
     .video-controls {
         flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .control-btn {
+        flex: 1;
+        min-width: 50px;
+        padding: 10px 8px;
+        font-size: 1.2rem;
     }
 
     .comm-container {
         gap: 0;
+        padding: 10px;
+        grid-template-columns: 1fr;
     }
 
     .transcription-panel {
         max-height: 150px;
+    }
+
+    .peer-name {
+        font-size: 0.85rem;
+    }
+
+    .video-label {
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-title {
+        font-size: 1.5rem;
+    }
+
+    .welcome-card {
+        padding: 20px 15px;
+    }
+
+    .video-container {
+        aspect-ratio: auto;
+        min-height: 200px;
+        border-radius: 8px;
+    }
+
+    .video-container.screen-share-local,
+    .video-container.screen-share-remote {
+        min-height: 250px;
+    }
+
+    .control-btn {
+        flex: 1;
+        padding: 8px 6px;
+        font-size: 1rem;
+        min-width: 45px;
+    }
+
+    .comm-container {
+        padding: 8px;
+        gap: 0;
+    }
+
+    .video-grid {
+        gap: 8px;
+    }
+
+    .peer-name {
+        font-size: 0.8rem;
+    }
+
+    .video-label {
+        font-size: 0.75rem;
+        top: 5px;
+        left: 5px;
+    }
+
+    .transcription-panel {
+        max-height: 120px;
+        flex-basis: auto;
+    }
+
+    .modal-content {
+        width: 90%;
+        padding: 20px;
+    }
+
+    .input-field {
+        font-size: 16px; /* Prevents zoom on iOS */
     }
 }

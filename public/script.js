@@ -9,6 +9,7 @@ class TeamSyncClient {
         this.localStream = null;
         this.peers = new Map(); // Maps userId -> { connection, stream, video }
         this.peerNames = new Map(); // Maps userId -> userName
+        this.screenshareStreamIds = new Set(); // Track which stream IDs are screenshares
         this.sessionId = null;
         this.userId = null;
         this.userName = null;
@@ -415,10 +416,19 @@ class TeamSyncClient {
 
         // Handle remote stream
         peerConnection.ontrack = (event) => {
-            console.log('🎬 Received remote track from', peerId, 'kind:', event.track.kind);
-            // Check if this is a secondary stream (screen share)
-            const isScreenShare = document.getElementById(`video-${peerId}`) !== null && event.track.kind === 'video';
-            this.addRemoteVideo(peerId, event.streams[0], isScreenShare);
+            if (!event.streams || event.streams.length === 0) return;
+            
+            const stream = event.streams[0];
+            const streamId = stream.id;
+            
+            console.log('🎬 Received remote track from', peerId, 'kind:', event.track.kind, 'streamId:', streamId);
+            
+            // Only process video tracks - audio is handled with video
+            if (event.track.kind === 'video') {
+                // Check if this is a screenshare based on stream tracking
+                const isScreenShare = this.screenshareStreamIds.has(streamId);
+                this.addRemoteVideo(peerId, stream, isScreenShare);
+            }
         };
 
         // Handle connection state changes
@@ -568,12 +578,21 @@ class TeamSyncClient {
         this.peers.delete(peerId);
         this.peerNames.delete(peerId);
 
+        // Remove all video containers for this peer
         const videoElement = document.getElementById(`peer-${peerId}`);
         if (videoElement) videoElement.remove();
 
         // Also remove screen share video if it exists
         const screenElement = document.getElementById(`screen-${peerId}`);
         if (screenElement) screenElement.remove();
+        
+        // Remove any other media containers for this peer
+        const allContainers = document.querySelectorAll(`[id*="${peerId}"]`);
+        allContainers.forEach(container => {
+            if (container.className && container.className.includes('video-container')) {
+                container.remove();
+            }
+        });
 
         console.log('🗑️  Removed peer', peerId);
     }
@@ -650,10 +669,17 @@ class TeamSyncClient {
 
             // Create a new stream containing only the screen
             const screenOnlyStream = new MediaStream([screenTrack]);
+            
+            // Mark this stream as screenshare
+            this.screenshareStreamIds.add(screenOnlyStream.id);
+            console.log('📺 Marked stream', screenOnlyStream.id, 'as screenshare');
 
             // Add screen stream as secondary stream to all peer connections
             for (const [peerId, peerInfo] of this.peers) {
-                peerInfo.connection.addTrack(screenTrack, screenOnlyStream);
+                if (peerInfo.connection) {
+                    peerInfo.connection.addTrack(screenTrack, screenOnlyStream);
+                    console.log('📺 Added screenshare track to peer', peerId);
+                }
             }
 
             // Create a local screen share display element
@@ -702,20 +728,25 @@ class TeamSyncClient {
 
     async stopScreenShare() {
         try {
-            // Stop screen stream tracks
+            // Stop screen stream tracks and clear screenshare tracking
             if (this.screenStream) {
+                const screenStreamId = this.screenStream.id;
+                this.screenshareStreamIds.delete(screenStreamId);
                 this.screenStream.getTracks().forEach(track => track.stop());
             }
 
             // Remove screen track from all peer connections
             for (const [peerId, peerInfo] of this.peers) {
-                const senders = peerInfo.connection.getSenders();
-                for (const sender of senders) {
-                    if (sender.track && sender.track.kind === 'video' && sender.track !== this.localStream.getVideoTracks()[0]) {
-                        try {
-                            await peerInfo.connection.removeTrack(sender);
-                        } catch (e) {
-                            console.log('Error removing screen track:', e);
+                if (peerInfo.connection) {
+                    const senders = peerInfo.connection.getSenders();
+                    for (const sender of senders) {
+                        if (sender.track && sender.track.kind === 'video' && sender.track !== this.localStream.getVideoTracks()[0]) {
+                            try {
+                                await peerInfo.connection.removeTrack(sender);
+                                console.log('📺 Removed screenshare track from peer', peerId);
+                            } catch (e) {
+                                console.log('Error removing screen track:', e);
+                            }
                         }
                     }
                 }
@@ -726,6 +757,10 @@ class TeamSyncClient {
             if (screenShareContainer) {
                 screenShareContainer.remove();
             }
+            
+            // Remove all remote screenshare displays
+            const remoteScreens = document.querySelectorAll('[id^="screen-"]');
+            remoteScreens.forEach(screen => screen.remove());
 
             this.isScreenSharing = false;
             this.screenShareBtn.classList.remove('active');
