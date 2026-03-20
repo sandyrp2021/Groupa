@@ -247,6 +247,7 @@ class TeamSyncClient {
             if (data.success) {
                 this.sessionId = data.sessionId;
                 this.userName = userName;
+                await this.requestMediaAccess();
                 await this.startSession();
                 this.closeSessionModal();
             } else {
@@ -267,6 +268,7 @@ class TeamSyncClient {
             if (data.success) {
                 this.sessionId = sessionId;
                 this.userName = userName;
+                await this.requestMediaAccess();
                 await this.startSession();
                 this.closeSessionModal();
             } else {
@@ -275,6 +277,27 @@ class TeamSyncClient {
         } catch (error) {
             console.error('Join session error:', error);
             this.showStatus('Error joining session: ' + error.message);
+        }
+    }
+
+    async requestMediaAccess() {
+        try {
+            this.showStatus('Requesting camera and microphone access...');
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true }
+            });
+            
+            this.localVideo.srcObject = this.localStream;
+            this.videoEnabled = true;
+            this.audioEnabled = true;
+            this.toggleVideoBtn.classList.toggle('active', true);
+            this.toggleAudioBtn.classList.toggle('active', true);
+            
+            console.log('📹 Media access granted');
+        } catch (error) {
+            console.error('Media access error:', error);
+            throw new Error('Cannot access camera/microphone: ' + error.message);
         }
     }
 
@@ -288,7 +311,7 @@ class TeamSyncClient {
             this.commScreen.classList.add('active');
 
             // Update session info
-            this.sessionIdDisplay.textContent = `Session ID: ${this.sessionId}`;
+            this.sessionIdDisplay.textContent = `PIN: ${this.sessionId}`;
             this.updateParticipantCount(1);
 
             // Initialize socket and signaling
@@ -493,43 +516,15 @@ class TeamSyncClient {
     // ==========================================
 
     async toggleVideo() {
-        // If no stream yet, request media access
-        if (!this.localStream) {
-            try {
-                this.localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: { echoCancellation: true, noiseSuppression: true }
-                });
-                
-                this.localVideo.srcObject = this.localStream;
-                this.videoEnabled = true;
-                this.audioEnabled = true;
-                this.toggleVideoBtn.classList.toggle('active', true);
-                this.toggleAudioBtn.classList.toggle('active', true);
-                
-                // Add local stream to existing peer connections
-                if (this.peers.size > 0) {
-                    this.localStream.getTracks().forEach(track => {
-                        for (const [peerId, peerInfo] of this.peers) {
-                            peerInfo.connection.addTrack(track, this.localStream);
-                        }
-                    });
-                }
-                
-                console.log('📹 Camera enabled');
-            } catch (error) {
-                console.error('Camera access denied:', error);
-                alert('Cannot access camera/microphone: ' + error.message);
-            }
-        } else {
-            // Toggle existing stream
-            this.videoEnabled = !this.videoEnabled;
-            this.localStream.getVideoTracks().forEach(track => {
-                track.enabled = this.videoEnabled;
-            });
-            this.toggleVideoBtn.classList.toggle('active', this.videoEnabled);
-            console.log('📹 Camera toggled:', this.videoEnabled ? 'on' : 'off');
-        }
+        if (!this.localStream) return;
+        
+        // Toggle existing stream
+        this.videoEnabled = !this.videoEnabled;
+        this.localStream.getVideoTracks().forEach(track => {
+            track.enabled = this.videoEnabled;
+        });
+        this.toggleVideoBtn.classList.toggle('active', this.videoEnabled);
+        console.log('📹 Camera toggled:', this.videoEnabled ? 'on' : 'off');
     }
 
     toggleAudio() {

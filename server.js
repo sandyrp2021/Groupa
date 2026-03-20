@@ -36,6 +36,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 const sessions = new Map();
 const users = new Map();
 
+// ==========================================
+// Utility Functions
+// ==========================================
+
+// Generate 5-digit PIN for sessions
+function generateSessionPin() {
+    return String(Math.floor(Math.random() * 90000) + 10000);
+}
+
 class Session {
     constructor(id) {
         this.id = id;
@@ -78,7 +87,7 @@ class Session {
 
 // Create new session
 app.post('/api/sessions', (req, res) => {
-    const sessionId = 'session-' + uuidv4().substring(0, 12);
+    const sessionId = generateSessionPin();
     const session = new Session(sessionId);
     sessions.set(sessionId, session);
 
