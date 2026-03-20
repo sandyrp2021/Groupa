@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamSync - AI-Powered Team Communication</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen active">
+        <div class="welcome-container">
+            <div class="welcome-card">
+                <h1 class="app-title">TeamSync</h1>
+                <p class="app-tagline">AI-Powered Team Communication Platform</p>
+                
+                <div class="welcome-actions">
+                    <button id="create-session-btn" class="btn btn-primary">
+                        <span class="btn-icon">+</span>
+                        Create Session
+                    </button>
+                    <button id="join-session-btn" class="btn btn-secondary">
+                        <span class="btn-icon">→</span>
+                        Join Session
+                    </button>
+                </div>
+
+                <div class="welcome-features">
+                    <div class="feature-item">
+                        <span class="feature-icon">🎥</span>
+                        <span>Video & Audio</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🎤</span>
+                        <span>Live Transcription</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🤖</span>
+                        <span>AI Powered</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🔗</span>
+                        <span>Easy Link Sharing</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session ID Input Modal -->
+    <div id="join-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <h2>Join Session</h2>
+            <p>Enter the session ID to join:</p>
+            <input type="text" id="session-id-input" placeholder="Enter Session ID (e.g., teamsync-abc123xyz)" class="input-field">
+            <button id="join-confirm-btn" class="btn btn-primary btn-full">Join Session</button>
+        </div>
+    </div>
+
+    <!-- Main Communication Screen -->
+    <div id="communication-screen" class="screen">
+        <div class="comm-container">
+            <!-- Video Grid Container -->
+            <div class="video-grid-section">
+                <div class="video-grid" id="video-grid">
+                    <!-- Local video will be inserted here -->
+                    <div class="video-container local-video">
+                        <video id="local-video" autoplay muted playsinline></video>
+                        <div class="video-label">You</div>
+                        <div class="peer-name" id="local-name">Local User</div>
+                        <div class="mic-indicator local-mic">
+                            <div class="mic-pulse"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="video-controls">
+                    <button id="toggle-video-btn" class="control-btn" title="Toggle Video">
+                        <span class="icon">📹</span>
+                    </button>
+                    <button id="toggle-audio-btn" class="control-btn" title="Toggle Audio">
+                        <span class="icon">🎤</span>
+                    </button>
+                    <button id="share-link-btn" class="control-btn" title="Share Link">
+                        <span class="icon">🔗</span>
+                    </button>
+                    <button id="leave-session-btn" class="control-btn danger" title="Leave Session">
+                        <span class="icon">📞</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transcription Panel -->
+            <div class="transcription-panel">
+                <div class="panel-header">
+                    <h3>🎤 Live Transcription</h3>
+                    <button id="clear-transcript-btn" class="small-btn">Clear</button>
+                </div>
+                
+                <div class="transcript-content" id="transcript-content">
+                    <div class="transcript-info">Waiting for speech...</div>
+                </div>
+
+                <div class="speaker-indicator" id="speaker-indicator">
+                    <span class="indicator-label">Current Speaker:</span>
+                    <span class="indicator-name" id="current-speaker">None</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Copy Link Toast -->
+        <div id="copy-toast" class="toast">
+            Invite link copied to clipboard!
+        </div>
+
+        <!-- Session Info -->
+        <div class="session-info">
+            <span id="session-id-display">Session ID: Loading...</span>
+            <span id="participant-count">Participants: 1</span>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
