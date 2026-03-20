@@ -8,6 +8,7 @@ class TeamSyncClient {
         this.socket = null;
         this.localStream = null;
         this.peers = new Map(); // Maps userId -> { connection, stream, video }
+        this.peerNames = new Map(); // Maps userId -> userName
         this.sessionId = null;
         this.userId = null;
         this.userName = null;
@@ -109,6 +110,7 @@ class TeamSyncClient {
             this.userId = data.userId;
             data.participants.forEach(participant => {
                 if (participant.id !== this.userId) {
+                    this.peerNames.set(participant.id, participant.name);
                     this.initiateConnection(participant.id);
                 }
             });
@@ -117,6 +119,7 @@ class TeamSyncClient {
         // New participant joined
         this.socket.on('participant-joined', (data) => {
             console.log(`👋 ${data.userName} joined`);
+            this.peerNames.set(data.userId, data.userName);
             this.updateParticipantCount(data.totalParticipants);
             this.initiateConnection(data.userId);
         });
@@ -131,14 +134,32 @@ class TeamSyncClient {
         // WebRTC Signaling
         this.socket.on('offer', async (data) => {
             console.log(`📮 Received offer from ${data.from}`);
-            const peerConnection = this.createPeerConnection(data.from);
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            this.socket.emit('answer', {
-                to: data.from,
-                answer: peerConnection.localDescription
-            });
+            
+            // Check if we already have a peer connection
+            let peerConnection = null;
+            if (this.peers.has(data.from)) {
+                peerConnection = this.peers.get(data.from).connection;
+                if (peerConnection && peerConnection.signalingState !== 'stable') {
+                    console.log('⚠️  Existing connection in progress, reusing it');
+                }
+            }
+            
+            // Create new peer connection if needed
+            if (!peerConnection) {
+                peerConnection = this.createPeerConnection(data.from);
+            }
+            
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                this.socket.emit('answer', {
+                    to: data.from,
+                    answer: peerConnection.localDescription
+                });
+            } catch (error) {
+                console.error('Error handling offer:', error);
+            }
         });
 
         this.socket.on('answer', async (data) => {
@@ -403,6 +424,16 @@ class TeamSyncClient {
     }
 
     initiateConnection(peerId) {
+        // Check if connection already exists - avoid duplicate peer connections
+        if (this.peers.has(peerId)) {
+            const existingPeer = this.peers.get(peerId);
+            // If connection state is suitable, don't create a new one
+            if (existingPeer.connection && existingPeer.connection.signalingState !== 'closed') {
+                console.log(`⏭️  Peer connection to ${peerId} already exists, skipping initiation`);
+                return;
+            }
+        }
+
         const peerConnection = this.createPeerConnection(peerId);
         peerConnection.createOffer()
             .then(offer => peerConnection.setLocalDescription(offer))
@@ -441,7 +472,8 @@ class TeamSyncClient {
 
                 const nameLabel = document.createElement('div');
                 nameLabel.className = 'peer-name';
-                nameLabel.textContent = 'Transcripter';
+                const peerName = this.peerNames.get(peerId) || 'Unknown User';
+                nameLabel.textContent = peerName;
 
                 const micIndicator = document.createElement('div');
                 micIndicator.className = 'mic-indicator';
@@ -500,6 +532,7 @@ class TeamSyncClient {
             peerInfo.connection.close();
         }
         this.peers.delete(peerId);
+        this.peerNames.delete(peerId);
 
         const videoElement = document.getElementById(`peer-${peerId}`);
         if (videoElement) videoElement.remove();
@@ -767,6 +800,14 @@ class TeamSyncClient {
 
     addTranscript(speaker, text) {
         if (!text.trim()) return;
+
+        // Check if this transcript already exists (avoid duplicates)
+        const lastTranscript = this.transcripts[this.transcripts.length - 1];
+        if (lastTranscript && 
+            lastTranscript.speaker === speaker && 
+            lastTranscript.text === text.trim()) {
+            return; // Skip duplicate
+        }
 
         this.transcripts.push({
             speaker,
