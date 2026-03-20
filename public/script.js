@@ -135,17 +135,14 @@ class TeamSyncClient {
         this.socket.on('offer', async (data) => {
             console.log(`📮 Received offer from ${data.from}`);
             
-            // Check if we already have a peer connection
             let peerConnection = null;
             if (this.peers.has(data.from)) {
                 peerConnection = this.peers.get(data.from).connection;
-                if (peerConnection && peerConnection.signalingState !== 'stable') {
-                    console.log('⚠️  Existing connection in progress, reusing it');
-                }
             }
             
             // Create new peer connection if needed
             if (!peerConnection) {
+                console.log(`🆕 Creating new peer connection for ${data.from}`);
                 peerConnection = this.createPeerConnection(data.from);
             }
             
@@ -157,6 +154,7 @@ class TeamSyncClient {
                     to: data.from,
                     answer: peerConnection.localDescription
                 });
+                console.log(`✅ Answer sent to ${data.from}`);
             } catch (error) {
                 console.error('Error handling offer:', error);
             }
@@ -166,16 +164,25 @@ class TeamSyncClient {
             console.log(`📬 Received answer from ${data.from}`);
             if (this.peers.has(data.from)) {
                 const peerConnection = this.peers.get(data.from).connection;
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                if (peerConnection) {
+                    try {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                        console.log(`✅ Answer processed for ${data.from}`);
+                    } catch (error) {
+                        console.error('Error setting remote description:', error);
+                    }
+                }
             }
         });
 
+        // ICE Candidate
         this.socket.on('ice-candidate', async (data) => {
             if (this.peers.has(data.from)) {
-                const peerConnection = this.peers.get(data.from).connection;
-                if (data.candidate) {
+                const peerInfo = this.peers.get(data.from);
+                // Only add ICE candidate if we have a connection
+                if (peerInfo.connection && data.candidate) {
                     try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        await peerInfo.connection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     } catch (error) {
                         console.error('Error adding ICE candidate:', error);
                     }
@@ -386,10 +393,15 @@ class TeamSyncClient {
     createPeerConnection(peerId) {
         const peerConnection = new RTCPeerConnection({ iceServers: this.iceServers });
 
-        // Add local streams
-        this.localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, this.localStream);
-        });
+        // Add local streams BEFORE creating offer/answer
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                console.log(`📤 Adding ${track.kind} track to peer ${peerId}`);
+                peerConnection.addTrack(track, this.localStream);
+            });
+        } else {
+            console.warn('⚠️  No local stream available when creating peer connection');
+        }
 
         // Handle ICE candidates
         peerConnection.onicecandidate = (event) => {
@@ -411,25 +423,46 @@ class TeamSyncClient {
 
         // Handle connection state changes
         peerConnection.onconnectionstatechange = () => {
-            console.log('Connection state:', peerConnection.connectionState);
+            console.log(`Connection state with ${peerId}:`, peerConnection.connectionState);
             if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected') {
+                console.error(`❌ Connection failed with ${peerId}`);
                 this.removePeer(peerId);
             }
         };
 
+        // Handle ICE connection state for debugging
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log(`ICE connection state with ${peerId}:`, peerConnection.iceConnectionState);
+        };
+
         // Store peer connection
-        this.peers.set(peerId, { connection: peerConnection, stream: null });
+        const peerInfo = this.peers.get(peerId) || {};
+        this.peers.set(peerId, { 
+            ...peerInfo,
+            connection: peerConnection, 
+            stream: null 
+        });
 
         return peerConnection;
     }
 
     initiateConnection(peerId) {
-        // Check if connection already exists - avoid duplicate peer connections
+        // CRITICAL: Use tiebreaker to prevent simultaneous offer collision (glare)
+        // Only the peer with the lexically smaller ID sends the offer
+        const shouldISendOffer = this.userId < peerId;
+        
+        if (!shouldISendOffer) {
+            console.log(`⏳ Waiting for offer from ${peerId} (they have lower ID)`);
+            return;
+        }
+        
+        console.log(`📤 Sending offer to ${peerId} (I have lower ID)`);
+        
+        // Check if connection already exists
         if (this.peers.has(peerId)) {
             const existingPeer = this.peers.get(peerId);
-            // If connection state is suitable, don't create a new one
             if (existingPeer.connection && existingPeer.connection.signalingState !== 'closed') {
-                console.log(`⏭️  Peer connection to ${peerId} already exists, skipping initiation`);
+                console.log(`✅ Peer connection to ${peerId} already exists`);
                 return;
             }
         }
@@ -442,6 +475,7 @@ class TeamSyncClient {
                     to: peerId,
                     offer: peerConnection.localDescription
                 });
+                console.log(`✅ Offer sent to ${peerId}`);
             })
             .catch(error => console.error('Offer error:', error));
     }
